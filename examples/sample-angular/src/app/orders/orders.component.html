@@ -1,0 +1,4 @@
+<button type="button" (click)="refresh()">Refresh orders</button>
+@for (order of store.orders(); track order.id) {
+  <p>{{ order.label }}</p>
+}
