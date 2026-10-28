@@ -1,6 +1,9 @@
 import type { Review } from '../reviewers/angular.reviewer.js';
 import type { AgentResult } from '../agent/angular-agent.js';
 
+const scopeLabel = (scope: AgentResult['scope']): string =>
+  scope === 'focused area' ? 'focused area' : 'bounded area';
+
 export function formatReview(filePath: string, review: Review): string {
   const output = [
     '=================================',
@@ -12,13 +15,14 @@ export function formatReview(filePath: string, review: Review): string {
   ];
 
   if (review.issues.length === 0) {
-    output.push('Nie wykryto wiarygodnych problemów.', '');
+    output.push('No credible issues found.', '');
   }
 
   for (const issue of review.issues) {
-    const location = issue.lineStart === issue.lineEnd
-      ? `Line ${issue.lineStart}`
-      : `Lines ${issue.lineStart}-${issue.lineEnd}`;
+    const location =
+      issue.lineStart === issue.lineEnd
+        ? `Line ${issue.lineStart}`
+        : `Lines ${issue.lineStart}-${issue.lineEnd}`;
     output.push(
       `[${issue.severity}] ${location}`,
       `Problem: ${issue.problem}`,
@@ -35,7 +39,7 @@ export function formatReview(filePath: string, review: Review): string {
   }
 
   if (review.limitations.length > 0) {
-    output.push('Ograniczenia:', ...review.limitations.map((item) => `- ${item}`), '');
+    output.push('Limitations:', ...review.limitations.map((item) => `- ${item}`), '');
   }
 
   const counts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
@@ -53,23 +57,87 @@ export function formatProjectReview(result: AgentResult): string {
   const counts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
   for (const issue of result.review.issues) counts[issue.severity]++;
   const lines = [
-    '---------------------------------', '', 'CODE REVIEW', '',
+    '---------------------------------',
+    '',
+    'CODE REVIEW',
+    '',
     `Project: ${result.project}`,
-    `Files analyzed: ${result.readFiles.length}`,
-    ...result.readFiles.map((file) => `- ${file}`), '',
+    `Scope: ${scopeLabel(result.scope)}`,
+    `Files read: ${result.readFiles.length}`,
+    ...result.readFiles.map((file) => `- ${file}`),
+    '',
   ];
   for (const severity of ['HIGH', 'MEDIUM', 'LOW'] as const) {
     for (const issue of result.review.issues.filter((item) => item.severity === severity)) {
-      lines.push(`[${issue.severity}] ${issue.path}:${issue.lineStart}${issue.lineEnd === issue.lineStart ? '' : `-${issue.lineEnd}`}`,
-        `Problem: ${issue.problem}`, '', `Why: ${issue.why}`, '', `Suggestion: ${issue.suggestion}`, '', '---------------------------------', '');
+      lines.push(
+        `[${issue.severity}] ${issue.path}:${issue.lineStart}${issue.lineEnd === issue.lineStart ? '' : `-${issue.lineEnd}`}`,
+        `Problem: ${issue.problem}`,
+        '',
+        `Why: ${issue.why}`,
+        '',
+        `Suggestion: ${issue.suggestion}`,
+        '',
+        '---------------------------------',
+        '',
+      );
     }
   }
-  if (!result.review.issues.length) lines.push('No confirmed issues in the inspected files.', '');
-  if (result.review.limitations.length) lines.push('Limitations:', ...result.review.limitations.map((item) => `- ${item}`), '');
-  lines.push(`Issues found: ${result.review.issues.length}`,
+  if (!result.review.issues.length) lines.push('No confirmed issues in the files read.', '');
+  if (result.review.limitations.length)
+    lines.push('Limitations:', ...result.review.limitations.map((item) => `- ${item}`), '');
+  lines.push(
+    `Issues found: ${result.review.issues.length}`,
     `HIGH: ${counts.HIGH} | MEDIUM: ${counts.MEDIUM} | LOW: ${counts.LOW}`,
     `Tool calls: ${result.toolCalls} | Model rounds: ${result.rounds}`,
     `Tokens: input ${result.inputTokens}, output ${result.outputTokens}`,
-    result.complete ? 'Review completed.' : 'Review incomplete.');
+    result.complete ? 'Bounded review completed.' : 'Review incomplete.',
+  );
+  return lines.join('\n');
+}
+
+export function formatMarkdownReview(filePath: string, review: Review): string {
+  const lines = [`# File review: ${filePath}`, '', `Issues: ${review.issues.length}`, ''];
+  for (const issue of review.issues) {
+    lines.push(
+      `## ${issue.severity}: lines ${issue.lineStart}-${issue.lineEnd}`,
+      '',
+      `**Problem:** ${issue.problem}`,
+      '',
+      `**Why:** ${issue.why}`,
+      '',
+      `**Suggestion:** ${issue.suggestion}`,
+      '',
+    );
+  }
+  lines.push('## Limitations', '', ...review.limitations.map((item) => `- ${item}`), '');
+  return lines.join('\n');
+}
+
+export function formatMarkdownProjectReview(result: AgentResult): string {
+  const lines = [
+    `# Project review: ${result.project}`,
+    '',
+    `Scope: ${scopeLabel(result.scope)}. Review status: ${result.complete ? 'completed' : 'incomplete'}.`,
+    '',
+    '## Files read',
+    '',
+    ...result.readFiles.map((file) => `- ${file}`),
+    '',
+    '## Issues',
+    '',
+  ];
+  for (const issue of result.review.issues) {
+    lines.push(
+      `### ${issue.severity}: ${issue.path}:${issue.lineStart}-${issue.lineEnd}`,
+      '',
+      `**Problem:** ${issue.problem}`,
+      '',
+      `**Why:** ${issue.why}`,
+      '',
+      `**Suggestion:** ${issue.suggestion}`,
+      '',
+    );
+  }
+  lines.push('## Limitations', '', ...result.review.limitations.map((item) => `- ${item}`), '');
   return lines.join('\n');
 }
